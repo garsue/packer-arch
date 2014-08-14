@@ -8,7 +8,7 @@ PASSWORD=$(/usr/bin/openssl passwd -crypt 'vagrant')
 TIMEZONE='Asia/Tokyo'
 
 CONFIG_SCRIPT='/usr/local/bin/arch-config.sh'
-ROOT_PARTITION="${DISK}1"
+ROOT_PARTITION="${DISK}3"
 TARGET_DIR='/mnt'
 
 echo "==> clearing partition table on ${DISK}"
@@ -18,17 +18,25 @@ echo "==> destroying magic strings and signatures on ${DISK}"
 /usr/bin/dd if=/dev/zero of=${DISK} bs=512 count=2048
 /usr/bin/wipefs --all ${DISK}
 
-echo "==> creating /root partition on ${DISK}"
-/usr/bin/sgdisk --new=1:0:0 ${DISK}
+echo "==> creating partitions on ${DISK}"
+/usr/bin/sgdisk --new=1:0:+1007K ${DISK}
+/usr/bin/sgdisk --typecode=1:EF02 ${DISK}
+/usr/bin/sgdisk --new=2:0:+1G ${DISK}
+/usr/bin/sgdisk --typecode=2:8200 ${DISK}
+/usr/bin/sgdisk --new=3:0:0 ${DISK}
 
 echo "==> setting ${DISK} bootable"
 /usr/bin/sgdisk ${DISK} --attributes=1:set:2
 
-echo '==> creating /root filesystem (ext4)'
-/usr/bin/mkfs.ext4 -F -m 0 -q -L root ${ROOT_PARTITION}
+echo '==> creating /root filesystem (btrfs)'
+/usr/bin/mkfs.btrfs -f -L root ${ROOT_PARTITION}
+
+echo '==> creating swap'
+/usr/bin/mkswap ${DISK}2
+/usr/bin/swapon ${DISK}2
 
 echo "==> mounting ${ROOT_PARTITION} to ${TARGET_DIR}"
-/usr/bin/mount -o noatime,errors=remount-ro ${ROOT_PARTITION} ${TARGET_DIR}
+/usr/bin/mount -o defaults,noatime,compress=lzo ${ROOT_PARTITION} ${TARGET_DIR}
 
 echo '==> selecting mirrors'
 /usr/bin/pacman -Sy --noconfirm reflector
@@ -37,13 +45,10 @@ echo '==> selecting mirrors'
 
 echo '==> bootstrapping the base installation'
 /usr/bin/pacstrap ${TARGET_DIR} base base-devel
-/usr/bin/arch-chroot ${TARGET_DIR} pacman -S --noconfirm gptfdisk openssh syslinux
-/usr/bin/arch-chroot ${TARGET_DIR} syslinux-install_update -i -a -m
-/usr/bin/sed -i 's/sda3/sda1/' "${TARGET_DIR}/boot/syslinux/syslinux.cfg"
-/usr/bin/sed -i 's/TIMEOUT 50/TIMEOUT 10/' "${TARGET_DIR}/boot/syslinux/syslinux.cfg"
+/usr/bin/arch-chroot ${TARGET_DIR} pacman -S --noconfirm gptfdisk openssh grub
 
 echo '==> generating the filesystem table'
-/usr/bin/genfstab -p ${TARGET_DIR} >> "${TARGET_DIR}/etc/fstab"
+/usr/bin/genfstab -U -p ${TARGET_DIR} >> "${TARGET_DIR}/etc/fstab"
 
 echo '==> generating the system configuration script'
 /usr/bin/install --mode=0755 /dev/null "${TARGET_DIR}${CONFIG_SCRIPT}"
@@ -61,6 +66,9 @@ cat <<-EOF > "${TARGET_DIR}${CONFIG_SCRIPT}"
 	/usr/bin/ln -s '/usr/lib/systemd/system/dhcpcd@.service' '/etc/systemd/system/multi-user.target.wants/dhcpcd@eth0.service'
 	/usr/bin/sed -i 's/#UseDNS yes/UseDNS no/' /etc/ssh/sshd_config
 	/usr/bin/systemctl enable sshd.service
+	# grub setup
+	grub-install --recheck --debug ${DISK}
+	grub-mkconfig -o /boot/grub/grub.cfg
 
 	# VirtualBox Guest Additions
 	/usr/bin/pacman -S --noconfirm linux-headers virtualbox-guest-utils virtualbox-guest-dkms

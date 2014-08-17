@@ -69,6 +69,12 @@ cat <<-EOF > "${TARGET_DIR}${CONFIG_SCRIPT}"
 	# grub setup
 	grub-install --recheck --debug ${DISK}
 	grub-mkconfig -o /boot/grub/grub.cfg
+	# disable copy on write for log directory
+	mv /var/log/journal /var/log/journal_old
+	mkdir /var/log/journal
+	chattr +C /var/log/journal
+	cp /var/log/journal_old/* /var/log/journal
+	rm -rf /var/log/journal_old
 
 	# VirtualBox Guest Additions
 	/usr/bin/pacman -S --noconfirm linux-headers virtualbox-guest-utils virtualbox-guest-dkms

@@ -68,6 +68,7 @@ cat <<-EOF > "${TARGET_DIR}${CONFIG_SCRIPT}"
 	/usr/bin/systemctl enable sshd.service
 	# grub setup
 	grub-install --recheck --debug ${DISK}
+	sed -i 's/GRUB_TIMEOUT=5/GRUB_TIMEOUT=0/' /etc/default/grub
 	grub-mkconfig -o /boot/grub/grub.cfg
 	# disable copy on write for log directory
 	mv /var/log/journal /var/log/journal_old

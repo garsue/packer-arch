@@ -71,6 +71,9 @@ Name=en*
 DHCP=yes
 EOF2
 	/usr/bin/systemctl enable systemd-networkd.service
+	/usr/bin/systemctl enable systemd-resolved.service
+	/usr/bin/systemctl start systemd-resolved.service
+	ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
 
 	# SSH
 	/usr/bin/sed -i 's/#UseDNS yes/UseDNS no/' /etc/ssh/sshd_config

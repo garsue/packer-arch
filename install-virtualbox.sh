@@ -61,16 +61,27 @@ cat <<-EOF > "${TARGET_DIR}${CONFIG_SCRIPT}"
 	/usr/bin/locale-gen
 	/usr/bin/mkinitcpio -p linux
 	/usr/bin/usermod --password ${PASSWORD} root
-	# https://wiki.archlinux.org/index.php/Network_Configuration#Device_names
-	/usr/bin/ln -s /dev/null /etc/udev/rules.d/80-net-setup-link.rules
-	/usr/bin/ln -s '/usr/lib/systemd/system/dhcpcd@.service' '/etc/systemd/system/multi-user.target.wants/dhcpcd@eth0.service'
+
+	# Network interfaces
+	cat <<-EOF2 > /etc/systemd/network/MyDhcp.network
+[Match]
+Name=en*
+
+[Network]
+DHCP=yes
+EOF2
+	/usr/bin/systemctl enable systemd-networkd.service
+
+	# SSH
 	/usr/bin/sed -i 's/#UseDNS yes/UseDNS no/' /etc/ssh/sshd_config
 	/usr/bin/systemctl enable sshd.service
-	# grub setup
+
+	# GRUB
 	grub-install --recheck --debug ${DISK}
 	sed -i 's/GRUB_TIMEOUT=5/GRUB_TIMEOUT=0/' /etc/default/grub
 	grub-mkconfig -o /boot/grub/grub.cfg
-	# disable copy on write for log directory
+
+	# Disable CoW on journal directory
 	mv /var/log/journal /var/log/journal_old
 	mkdir /var/log/journal
 	chattr +C /var/log/journal
@@ -97,7 +108,7 @@ cat <<-EOF > "${TARGET_DIR}${CONFIG_SCRIPT}"
 	/usr/bin/chown vagrant:users /home/vagrant/.ssh/authorized_keys
 	/usr/bin/chmod 0600 /home/vagrant/.ssh/authorized_keys
 
-	# clean up
+	# Clean up
 	/usr/bin/pacman -Rcns --noconfirm gptfdisk
 	/usr/bin/pacman -Scc --noconfirm
 EOF
